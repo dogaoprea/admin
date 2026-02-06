@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Admin - DOGÃO PREÁ</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+
+    <div id="login-overlay">
+        <div class="login-box">
+            <h2 style="font-family: 'Bebas Neue'; font-size: 32px; color: var(--primary);">Área Restrita</h2>
+            <p style="color:#666; font-size:13px; margin-bottom:20px;">Acesso Administrativo Seguro</p>
+
+            <input type="email" id="admin-email" class="form-input" placeholder="E-mail de Administrador" style="margin-bottom: 10px;">
+            <input type="password" id="admin-pass" class="form-input" placeholder="Senha" style="margin-bottom: 15px;">
+            
+            <button class="btn" style="background: var(--primary); width: 100%; padding: 12px;" onclick="performFirebaseLogin()">ENTRAR</button>
+            <p id="login-error" style="color: var(--danger); font-size: 12px; display: none; margin-top: 10px;"></p>
+        </div>
+    </div>
+
+    <div id="app-content" style="display: none;">
+        <header class="admin-header">
+            <div style="display:flex; align-items:center;">
+                <h1>Dogão Admin</h1>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span id="user-display" style="font-size:11px; color:#666; font-weight:600;"></span>
+                <button class="btn" onclick="performLogout()" style="background: #eee; color: #333;"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
+        </header>
+
+        <div class="container">
+            <div class="nav-tabs">
+                <button class="nav-tab active" onclick="switchTab('orders')"><i class="fas fa-receipt"></i> Pedidos</button>
+                <button class="nav-tab" onclick="switchTab('history')"><i class="fas fa-history"></i> Histórico</button>
+                <button class="nav-tab" onclick="switchTab('menu')"><i class="fas fa-hamburger"></i> Cardápio</button>
+            </div>
+
+            <div id="tab-orders" class="tab-content active">
+                <button class="fab-btn" onclick="openOrderEditModal(null)" title="Novo Pedido">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <div id="orders-list">
+                    <p style="text-align: center; margin-top: 40px; color: #888;">Aguardando...</p>
+                </div>
+            </div>
+
+            <div id="tab-history" class="tab-content">
+                <div class="card">
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; margin-bottom:5px; font-size:12px; font-weight:600; color:#555;">Data do Expediente</label>
+                        <input type="date" id="filter-ref-date" class="form-input">
+                        <small style="color:#888; font-size:11px; display:block; margin-top:4px;">
+                            <i class="far fa-clock"></i> Filtra das 18h deste dia até as 04h do dia seguinte.
+                        </small>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn" style="background:var(--primary); flex:1;" onclick="applyHistoryFilter()">Filtrar</button>
+                        <button class="btn" style="background:#eee; color:#333; width:auto;" onclick="clearHistoryFilter()"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+
+                <div class="financial-summary">
+                    <div class="fin-card revenue"><span>Faturamento</span><strong id="summary-total">R$ 0,00</strong></div>
+                    <div class="fin-card fees"><span>Taxas</span><strong id="summary-fees">R$ 0,00</strong></div>
+                    <div class="fin-card count"><span>Pedidos</span><strong id="summary-count">0</strong></div>
+                </div>
+                <div id="history-list-container"></div>
+            </div>
+
+            <div id="tab-menu" class="tab-content">
+                <div class="card" style="padding: 20px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <div>
+                            <h3 style="margin:0; font-size: 18px;">Modo Manual</h3>
+                            <div id="status-text" style="font-size:12px; color:#666; margin-top: 4px;">Automático</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="manual-override" onchange="toggleManualOverride()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="manual-controls" style="display: none; background: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #eee;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 600; color: #333;">Loja Aberta?</span>
+                            <label class="switch">
+                                <input type="checkbox" id="store-toggle" onchange="toggleStoreStatus()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <small style="display:block; margin-top:8px; color:#888; font-size:11px;">
+                            <i class="fas fa-info-circle"></i> O modo manual ignora o horário de funcionamento padrão.
+                        </small>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button class="btn" style="background:var(--primary); color:#000; flex:1; justify-content:center; padding: 12px;" onclick="openModal()">
+                        <i class="fas fa-plus-circle"></i> NOVO ITEM
+                    </button>
+                    <button class="btn" style="background:#333; color:white; flex:1; justify-content:center; padding: 12px;" onclick="openCategoryModal()">
+                        <i class="fas fa-list"></i> Categorias
+                    </button>
+                </div>
+                <div id="items-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="item-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="modal-title" style="margin-top:0;">Item</h2>
+            <input type="hidden" id="edit-id">
+            <div class="form-group"><label>Nome</label><input type="text" id="edit-name" class="form-input"></div>
+            <div class="form-group"><label>Preço</label><input type="number" step="0.50" id="edit-price" class="form-input"></div>
+            <div class="form-group"><label>Categoria</label><select id="edit-category" class="form-select"></select></div>
+            <div class="form-group"><label>Descrição</label><textarea id="edit-desc" rows="2"></textarea></div>
+            
+            <div class="form-group" style="background:#f8f9fa; padding:10px; border-radius:8px;">
+                <label>Opções</label>
+                <div style="display:flex; gap:5px; margin-bottom:5px;">
+                    <input type="text" id="new-option-input" class="form-input" placeholder="Nova opção">
+                    <button class="btn" style="background:var(--success); color:#fff;" onclick="addOptionToItem()">+</button>
+                </div>
+                <div id="item-options-list" style="display:flex; flex-wrap:wrap; gap:5px;"></div>
+            </div>
+
+            <div class="checkbox-wrapper" style="margin-top:10px;">
+                <input type="checkbox" id="edit-available" checked> <label for="edit-available">Disponível</label>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                <button class="btn" style="background:#eee;" onclick="closeModal()">Cancelar</button>
+                <button class="btn" style="background:var(--primary);" onclick="saveItem()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="cat-modal" class="modal">
+        <div class="modal-content">
+            <h2 style="margin-top:0;">Categorias</h2>
+            <div id="cat-list-container" class="cat-edit-list"></div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+                <button class="btn" style="background:#eee;" onclick="closeCategoryModal()">Fechar</button>
+                <button class="btn" style="background:var(--primary);" onclick="saveCategorySettings()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="order-edit-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header-fixed">
+                <h3 id="order-modal-title" style="margin:0; font-family:'Bebas Neue'; font-size:24px; color:var(--primary-dark);">Pedido</h3>
+                <button onclick="closeOrderEditModal()" style="background:none; border:none; font-size:24px; padding:5px;"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body-scroll">
+                <input type="hidden" id="edit-order-doc-id">
+                <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:15px;">
+                    <div style="flex:1;">
+                        <label class="form-label">Cliente</label>
+                        <input type="text" id="edit-order-name" class="form-input" placeholder="Nome" list="customer-suggestions" autocomplete="off" oninput="checkCustomerAddress(this.value)">
+                        <datalist id="customer-suggestions"></datalist>
+                    </div>
+                    <div style="text-align:center;">
+                        <label class="form-label" style="font-size:11px;">Tipo</label>
+                        <input type="hidden" id="edit-order-type" value="Entrega">
+                        <button type="button" id="btn-order-type" class="btn" style="width:50px; height:48px; font-size:20px; padding:0; display:flex; align-items:center; justify-content:center;" onclick="cycleOrderType()">
+                            <i class="fas fa-motorcycle"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group"><label class="form-label">WhatsApp</label><input type="tel" id="edit-order-phone" class="form-input" placeholder="5588..."></div>
+                <div class="form-group"><label class="form-label">Endereço / Observação</label><textarea id="edit-order-address" class="form-input" rows="2" placeholder="Endereço completo..."></textarea></div>
+                <hr style="border:0; border-top:1px dashed #ccc; margin: 20px 0;">
+                <h4 style="margin:0 0 10px 0; color:#333;">Itens do Pedido</h4>
+                <div id="edit-order-items-list"></div>
+                <div style="display:flex; gap:10px; margin-top:15px; margin-bottom:15px;">
+                     <button class="btn" style="background:var(--primary); color:#000; flex:1; font-size:13px;" onclick="openMenuSelectionModal()"><i class="fas fa-hamburger"></i> Cardápio</button>
+                     <button class="btn" style="background:#607D8B; color:white; flex:1; font-size:13px;" onclick="openCustomItemModal()"><i class="fas fa-plus"></i> Item Avulso</button>
+                </div>
+                <div style="margin-top:20px; padding-top:20px; border-top:1px dashed #ccc;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <span style="font-weight:700; font-size:16px;">Total: <span id="main-order-total-display" style="color:var(--primary-dark);">R$ 0,00</span></span>
+                        <small id="main-payment-method-display" style="color:#666; font-weight:600;">-</small>
+                    </div>
+                    <button class="btn" style="background:var(--primary); color:#000; width:100%; padding:15px; font-weight:800; display:flex; justify-content:center; gap:10px;" onclick="openPaymentModal()"><i class="fas fa-dollar-sign"></i> DEFINIR PAGAMENTO E VALORES</button>
+                </div>
+                <div style="height:20px;"></div>
+            </div>
+            <div class="modal-footer-fixed">
+                <button class="btn" style="background:#eee; color:#333; flex:1;" onclick="closeOrderEditModal()">Cancelar</button>
+                <button class="btn" style="background:var(--success); color:#fff; flex:2;" onclick="saveOrderChanges()">SALVAR PEDIDO</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="menu-selection-modal" class="modal sub-modal">
+        <div class="modal-content" style="display:flex; flex-direction:column; height:85vh; max-height:800px; padding:0;">
+            <div class="modal-header-fixed">
+                <h3 style="margin:0; font-family:'Bebas Neue'; color:var(--primary-dark);">Selecionar Item</h3>
+                <button onclick="closeMenuSelectionModal()" style="border:none; background:none; font-size:24px;">&times;</button>
+            </div>
+            <div class="modal-body-scroll" id="menu-selection-list"></div>
+        </div>
+    </div>
+    
+    <div id="custom-item-modal" class="modal sub-modal">
+        <div class="modal-content" style="max-width:350px;">
+            <h3 style="margin-top:0; font-family:'Bebas Neue'; color:var(--primary-dark);">Novo Item Avulso</h3>
+            <div class="form-group"><label class="form-label">Nome do Item</label><input type="text" id="custom-item-name" class="form-input" placeholder="Ex: Taxa Extra / Bebida Extra"></div>
+            <div class="form-group"><label class="form-label">Preço (R$)</label><input type="number" id="custom-item-price" class="form-input" placeholder="0.00" step="0.50" onfocus="this.select()"></div>
+            <div class="form-group"><label class="form-label">Quantidade</label><input type="number" id="custom-item-qty" class="form-input" value="1" onfocus="this.select()"></div>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn" style="background:#eee; flex:1;" onclick="closeCustomItemModal()">Cancelar</button>
+                <button class="btn" style="background:var(--primary); flex:1;" onclick="addCustomItemToOrder()">Adicionar</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="payment-modal" class="modal sub-modal">
+        <div class="modal-content" style="max-width:400px;">
+            <h3 style="margin-top:0; font-family:'Bebas Neue'; color:var(--primary-dark);">Pagamento e Valores</h3>
+            <div class="form-group">
+                <label class="form-label">Forma de Pagamento</label>
+                <select id="edit-order-payment" class="form-select" onchange="toggleChangeInput(); calculateOrderTotal();">
+                    <option value="PIX">PIX</option>
+                    <option value="Cartão de Crédito">Cartão de Crédito</option>
+                    <option value="Cartão de Débito">Cartão de Débito</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                </select>
+            </div>
+            <div class="form-group" id="div-change-input" style="display:none;">
+                <label class="form-label">Troco para quanto?</label>
+                <input type="number" id="edit-order-change" class="form-input" placeholder="0.00" step="0.50" onfocus="this.select()">
+            </div>
+            <div style="margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-radius: 8px; border: 1px solid #bbdefb; display: flex; align-items: center; justify-content: space-between;">
+                <div><label style="font-size: 14px; font-weight: 700; color: #1565c0; display: block;"><i class="fas fa-calculator"></i> Repassar Taxa?</label><small style="font-size: 10px; color: #555;">Calcula acréscimo automático</small></div>
+                <label class="switch"><input type="checkbox" id="auto-fee-toggle" onchange="calculateOrderTotal()"><span class="slider"></span></label>
+            </div>
+            <div style="margin-bottom:20px; background: #fffde7; padding: 10px; border-radius: 6px; border: 1px solid #ffe082;">
+                <label style="display:flex; align-items:center; gap:8px; font-weight:700; color:#555; cursor:pointer;"><input type="checkbox" id="edit-is-paid" style="width:20px; height:20px;"> <span>Pedido já está PAGO?</span></label>
+            </div>
+            <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+            <div class="financial-block" style="border:none; padding:0; box-shadow:none;">
+                <div class="fin-row"><label>Subtotal (Itens):</label><span id="edit-order-subtotal" style="font-weight:700;">R$ 0,00</span></div>
+                <div class="fin-row"><label><i class="fas fa-motorcycle"></i> Taxa Entrega</label><input type="number" id="edit-order-fee" placeholder="0.00" step="0.50" onfocus="this.select()" onchange="calculateOrderTotal()"></div>
+                <div class="fin-row"><label style="color:var(--info);"><i class="fas fa-plus-circle"></i> Acréscimo</label><input type="number" id="edit-order-surcharge" placeholder="0.00" step="0.50" style="color:var(--info);" onfocus="this.select()" onchange="calculateOrderTotal()"></div>
+                <div class="fin-row"><label style="color:var(--danger);"><i class="fas fa-minus-circle"></i> Desconto</label><input type="number" id="edit-order-discount" placeholder="0.00" step="0.50" style="color:var(--danger);" onfocus="this.select()" onchange="calculateOrderTotal()"></div>
+                <div class="fin-row" style="margin-top:15px; font-size:18px; border-top:1px solid #eee; padding-top:10px;">
+                    <label style="color:var(--primary-dark); font-weight:800;">TOTAL FINAL</label><strong id="edit-order-total" style="color:var(--primary-dark);">R$ 0,00</strong>
+                </div>
+            </div>
+            <button class="btn" style="background:var(--success); color:#fff; width:100%; margin-top:20px;" onclick="closePaymentModal()">OK, Confirmar</button>
+        </div>
+    </div>
+
+    <div id="toast"><i class="fas fa-check"></i> Salvo!</div>
+
+    <script src="script.js"></script>
+</body>
+</html>
